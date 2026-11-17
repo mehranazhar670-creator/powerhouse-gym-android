@@ -1,46 +1,54 @@
-
-name: Build Power House Gym APK
+name: Android CI - PowerHouse Gym
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: '17'
+          distribution: 'temurin'
+          java-version: '21'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Grant execute permission
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Restore debug keystore for signing
         run: |
-          if [ -f ./gradlew ]; then
-            chmod +x ./gradlew
+          if [ -f debug.keystore.base64 ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
           else
-            echo "ERROR: gradlew not found in repository"
-            exit 1
+            keytool -genkeypair -v -keystore debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
           fi
 
-      - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Run unit tests
+        run: gradle :app:testDebugUnitTest --tests 'com.example.Example*'
 
-      - name: Upload APK
+      - name: Build Debug APK
+        run: gradle :app:assembleDebug
+
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Power-House-Gym-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: powerhouse-gym-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 7
